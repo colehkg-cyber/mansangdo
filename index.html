@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>萬象圖 (만상도) — 통합 RAG 지식 그래프</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0d0221; color: #f5f0ff; font-family: 'Pretendard', -apple-system, sans-serif; overflow: hidden; }
+canvas { display: block; }
+#info { position: fixed; top: 20px; left: 20px; z-index: 10; }
+#info h1 { font-size: 24px; color: #D4AF37; }
+#info p { font-size: 12px; color: #b8a9cc; margin-top: 4px; }
+#tooltip { position: fixed; display: none; background: #1f1035ee; border: 1px solid #D4AF37; border-radius: 12px; padding: 16px; max-width: 320px; z-index: 20; pointer-events: none; }
+#tooltip h3 { color: #D4AF37; font-size: 14px; margin-bottom: 8px; }
+#tooltip p { color: #b8a9cc; font-size: 11px; line-height: 1.6; }
+#tooltip .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; margin: 2px; }
+#legend { position: fixed; bottom: 20px; left: 20px; z-index: 10; font-size: 11px; }
+#legend div { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+#legend span { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+</head>
+<body>
+<div id="info">
+  <h1>🔮 萬象圖 (만상도)</h1>
+  <p>동서양 심리철학 통합 RAG 지식 그래프 · 노드를 클릭하세요</p>
+</div>
+<div id="tooltip"><h3></h3><p></p></div>
+<div id="legend">
+  <div><span style="background:#e74c3c"></span> 사주 명리학</div>
+  <div><span style="background:#9b59b6"></span> 타로</div>
+  <div><span style="background:#3498db"></span> 수비학</div>
+  <div><span style="background:#27ae60"></span> 도교·내단</div>
+  <div><span style="background:#f39c12"></span> 심리학·최면</div>
+  <div><span style="background:#e67e22"></span> 인상학</div>
+  <div><span style="background:#1abc9c"></span> 별자리</div>
+  <div><span style="background:#D4AF37"></span> 핵심 연결</div>
+</div>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize();
+window.addEventListener('resize', resize);
+
+const COLORS = {
+  saju: '#e74c3c', tarot: '#9b59b6', numerology: '#3498db',
+  tao: '#27ae60', psychology: '#f39c12', physiognomy: '#e67e22',
+  zodiac: '#1abc9c', core: '#D4AF37'
+};
+
+const nodes = [
+  // 핵심
+  {id:'oheng', label:'오행\n(五行)', x:0, y:0, r:40, color:COLORS.core, cat:'core',
+   desc:'木火土金水 — 모든 동서양 체계의 근간. 사주, 도교, 한의학, 인상학, 타로의 원소 체계와 직접 연결.', tags:['상생상극','과승반극','에너지패턴']},
+  {id:'yinyang', label:'음양\n(陰陽)', x:-80, y:-120, r:32, color:COLORS.core, cat:'core',
+   desc:'우주의 이원적 원리. 천간의 양/음, 타로의 정/역방향, 별자리의 남/녀 원소와 연결.', tags:['대대관계','균형','동양철학']},
+  
+  // 사주 명리학
+  {id:'saju', label:'사주\n명리학', x:-250, y:-80, r:35, color:COLORS.saju, cat:'saju',
+   desc:'년·월·일·시의 천간지지로 운명을 해석. 오행 상생상극이 핵심 원리.', tags:['천간10','지지12','십신','용신']},
+  {id:'cheongan', label:'천간\n(天干)', x:-350, y:-160, r:24, color:COLORS.saju, cat:'saju',
+   desc:'갑을병정무기경신임계 — 하늘의 10가지 기운. 음양오행 배속.', tags:['10개','양5음5']},
+  {id:'jiji', label:'지지\n(地支)', x:-350, y:0, r:24, color:COLORS.saju, cat:'saju',
+   desc:'자축인묘진사오미신유술해 — 12지신. 동물, 시간, 계절 대응.', tags:['12지신','삼합','육합','충형파해']},
+  {id:'sipsin', label:'십신\n(十神)', x:-400, y:-80, r:22, color:COLORS.saju, cat:'saju',
+   desc:'비견·겁재·식신·상관·편재·정재·편관·정관·편인·정인 — 인간관계와 심리.', tags:['길신5','흉신4']},
+  {id:'yongsin', label:'용신\n(用神)', x:-300, y:80, r:22, color:COLORS.saju, cat:'saju',
+   desc:'삶의 도구. 직업·성향을 결정하는 핵심 기운.', tags:['격','변격','겸격']},
+  {id:'daewoon', label:'대운\n세운', x:-200, y:100, r:22, color:COLORS.saju, cat:'saju',
+   desc:'10년 주기 대운 + 1년 세운. 운의 흐름과 변화.', tags:['순행역행','대운수']},
+  
+  // 타로
+  {id:'tarot', label:'타로\n(78장)', x:250, y:-80, r:35, color:COLORS.tarot, cat:'tarot',
+   desc:'22장 메이저 + 56장 마이너 아르카나. 서양 점술의 핵심.', tags:['아르카나','스프레드']},
+  {id:'major', label:'메이저\n아르카나', x:350, y:-160, r:24, color:COLORS.tarot, cat:'tarot',
+   desc:'0 Fool ~ XXI World. 인생의 큰 전환점. 카바라, 점성학 연결.', tags:['22장','Fool여정']},
+  {id:'minor', label:'마이너\n아르카나', x:350, y:0, r:24, color:COLORS.tarot, cat:'tarot',
+   desc:'Cups/Pentacles/Swords/Wands 4슈트 × 14장. 일상의 사건.', tags:['4원소','코트카드']},
+  {id:'kabbala', label:'카바라\n생명의나무', x:400, y:-80, r:20, color:COLORS.tarot, cat:'tarot',
+   desc:'10 세피로트 + 22 경로. 타로 메이저 아르카나와 1:1 대응.', tags:['히브리어','Tree of Life']},
+  
+  // 수비학
+  {id:'numerology', label:'수비학', x:150, y:180, r:28, color:COLORS.numerology, cat:'numerology',
+   desc:'숫자의 신비적 의미. 생명수, 이름획수, 마스터넘버.', tags:['1~9','11/22/33']},
+  
+  // 별자리
+  {id:'zodiac', label:'별자리\n12궁', x:-150, y:180, r:28, color:COLORS.zodiac, cat:'zodiac',
+   desc:'양자리~물고기자리. 태양 별자리 기반 성격/운세.', tags:['4원소','행성']},
+  
+  // 도교·내단
+  {id:'tao', label:'도교\n(道教)', x:0, y:-200, r:32, color:COLORS.tao, cat:'tao',
+   desc:'노자·장자의 도(道). 무위자연, 음양오행, 연단술, 양생의 모체.', tags:['도덕경','무위']},
+  {id:'neidan', label:'내단\n(內丹)', x:100, y:-280, r:24, color:COLORS.tao, cat:'tao',
+   desc:'정→기→신 삼보 수련. 소주천·대주천. 몸이 연단로.', tags:['삼보','성명쌍수']},
+  {id:'waidan', label:'외단\n(外丹)', x:-100, y:-280, r:20, color:COLORS.tao, cat:'tao',
+   desc:'광물 연단술. 진시황·서복. 수은단약. 불로장생의 꿈.', tags:['수은','단약','진시황']},
+  {id:'yangsheng', label:'양생\n(養生)', x:0, y:-320, r:20, color:COLORS.tao, cat:'tao',
+   desc:'식이·수면·호흡·명상 통합 건강법. 도인·기공의 모체.', tags:['토나','좌망','도인']},
+  
+  // 심리학·최면
+  {id:'psychology', label:'심리학\n최면', x:200, y:100, r:28, color:COLORS.psychology, cat:'psychology',
+   desc:'슐츠 자율훈련, 에릭슨 최면, 융 원형론. 자기암시와 무의식.', tags:['암시','이완','집중']},
+  {id:'jung', label:'융\n원형론', x:300, y:160, r:20, color:COLORS.psychology, cat:'psychology',
+   desc:'영웅·현자·탐험가·통치자 — 타로와 사주의 원형 매핑.', tags:['아키타입','무의식']},
+  {id:'hypnosis', label:'자기\n최면', x:280, y:60, r:20, color:COLORS.psychology, cat:'psychology',
+   desc:'슐츠 6단계, 로티스법. 이완→트랜스→암시. 양생과 유사.', tags:['ASC','암시']},
+  
+  // 인상학
+  {id:'physiognomy', label:'인상학\n(人相學)', x:-200, y:200, r:26, color:COLORS.physiognomy, cat:'physiognomy',
+   desc:'얼굴로 보는 운명. 오악·삼정·십이궁. 오행 얼굴형.', tags:['오악','삼정','기색']},
+];
+
+// 위치 보정 (중앙 기준)
+const cx = canvas.width / 2, cy = canvas.height / 2;
+nodes.forEach(n => { n.x += cx; n.y += cy; });
+
+const edges = [
+  // 핵심 연결
+  ['oheng','saju','오행=사주핵심'],['oheng','tarot','4원소대응'],['oheng','tao','오행=도교기반'],
+  ['oheng','physiognomy','오행얼굴형'],['oheng','zodiac','4원소매핑'],['oheng','numerology','숫자↔오행'],
+  ['yinyang','oheng','음양→오행'],['yinyang','saju','천간음양'],['yinyang','tarot','정/역방향'],
+  // 사주 내부
+  ['saju','cheongan',''],['saju','jiji',''],['saju','sipsin',''],['saju','yongsin',''],['saju','daewoon',''],
+  ['cheongan','jiji','간지조합'],
+  // 타로 내부
+  ['tarot','major',''],['tarot','minor',''],['tarot','kabbala','히브리어22자'],
+  // 도교 내부
+  ['tao','neidan',''],['tao','waidan',''],['tao','yangsheng',''],['tao','yinyang','도가철학'],
+  ['neidan','yangsheng','수련통합'],['waidan','neidan','외→내전환'],
+  // 심리학
+  ['psychology','jung',''],['psychology','hypnosis',''],
+  ['jung','tarot','원형매핑'],['jung','sipsin','십신↔원형'],
+  ['hypnosis','yangsheng','이완=양생'],['hypnosis','neidan','호흡=토나'],
+  // 교차
+  ['zodiac','tarot','점성학연결'],['zodiac','saju','계절/방위'],
+  ['numerology','tarot','숫자해석'],['numerology','saju','획수/수리'],
+  ['physiognomy','saju','오행공유'],
+  ['tao','saju','동양철학근간'],
+];
+
+let hoveredNode = null;
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // 배경 별
+  for (let i = 0; i < 80; i++) {
+    const sx = (Math.sin(i * 47) * 0.5 + 0.5) * canvas.width;
+    const sy = (Math.cos(i * 31) * 0.5 + 0.5) * canvas.height;
+    const sr = Math.random() * 1.5 + 0.5;
+    ctx.fillStyle = `rgba(255,255,255,${0.1 + Math.sin(Date.now()/1000 + i) * 0.1})`;
+    ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI*2); ctx.fill();
+  }
+  
+  // 간선
+  edges.forEach(([from, to, label]) => {
+    const a = nodes.find(n => n.id === from);
+    const b = nodes.find(n => n.id === to);
+    if (!a || !b) return;
+    const isHighlight = hoveredNode && (hoveredNode.id === from || hoveredNode.id === to);
+    ctx.strokeStyle = isHighlight ? '#D4AF3788' : '#3d2a5c44';
+    ctx.lineWidth = isHighlight ? 2 : 1;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    if (label && isHighlight) {
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      ctx.fillStyle = '#D4AF37'; ctx.font = '9px Pretendard';
+      ctx.textAlign = 'center'; ctx.fillText(label, mx, my - 4);
+    }
+  });
+  
+  // 노드
+  nodes.forEach(n => {
+    const isHover = hoveredNode === n;
+    const glow = isHover ? 20 : 8;
+    
+    // 그림자
+    ctx.shadowColor = n.color;
+    ctx.shadowBlur = glow;
+    ctx.fillStyle = n.color + (isHover ? 'cc' : '66');
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    // 테두리
+    ctx.strokeStyle = n.color;
+    ctx.lineWidth = isHover ? 3 : 1.5;
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI*2); ctx.stroke();
+    
+    // 라벨
+    ctx.fillStyle = '#f5f0ff';
+    ctx.font = `${isHover ? 'bold ' : ''}${n.r > 30 ? 12 : 10}px Pretendard`;
+    ctx.textAlign = 'center';
+    const lines = n.label.split('\n');
+    lines.forEach((line, i) => {
+      ctx.fillText(line, n.x, n.y + (i - (lines.length-1)/2) * 14 + 4);
+    });
+  });
+  
+  requestAnimationFrame(draw);
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  hoveredNode = null;
+  for (const n of nodes) {
+    if (Math.hypot(mx - n.x, my - n.y) < n.r + 5) {
+      hoveredNode = n;
+      break;
+    }
+  }
+  if (hoveredNode) {
+    canvas.style.cursor = 'pointer';
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 15) + 'px';
+    tooltip.style.top = (e.clientY + 15) + 'px';
+    tooltip.querySelector('h3').textContent = hoveredNode.label.replace('\n', ' ');
+    tooltip.querySelector('p').innerHTML = hoveredNode.desc + '<br><br>' +
+      hoveredNode.tags.map(t => `<span class="tag" style="background:${hoveredNode.color}33;color:${hoveredNode.color}">${t}</span>`).join('');
+  } else {
+    canvas.style.cursor = 'default';
+    tooltip.style.display = 'none';
+  }
+});
+
+draw();
+</script>
+</body>
+</html>
