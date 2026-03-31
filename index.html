@@ -144,9 +144,52 @@ const edges = [
 ];
 
 let hoveredNode = null;
+let zoom = 1;
+let panX = 0, panY = 0;
+let isDragging = false;
+let dragStartX = 0, dragStartY = 0;
+
+// 줌 (마우스 휠 + 핀치)
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  const newZoom = Math.max(0.3, Math.min(3, zoom * delta));
+  // 마우스 위치 기준 줌
+  const mx = e.offsetX, my = e.offsetY;
+  panX = mx - (mx - panX) * (newZoom / zoom);
+  panY = my - (my - panY) * (newZoom / zoom);
+  zoom = newZoom;
+}, {passive: false});
+
+// 드래그 이동
+canvas.addEventListener('mousedown', (e) => {
+  if (!hoveredNode) { isDragging = true; dragStartX = e.clientX - panX; dragStartY = e.clientY - panY; canvas.style.cursor = 'grabbing'; }
+});
+canvas.addEventListener('mouseup', () => { isDragging = false; canvas.style.cursor = 'default'; });
+canvas.addEventListener('mouseleave', () => { isDragging = false; });
+
+// 터치 지원 (모바일)
+let lastTouchDist = 0;
+canvas.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 1) { isDragging = true; dragStartX = e.touches[0].clientX - panX; dragStartY = e.touches[0].clientY - panY; }
+  if (e.touches.length === 2) { lastTouchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); }
+}, {passive: true});
+canvas.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 1 && isDragging) { panX = e.touches[0].clientX - dragStartX; panY = e.touches[0].clientY - dragStartY; }
+  if (e.touches.length === 2) {
+    const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    if (lastTouchDist > 0) { zoom = Math.max(0.3, Math.min(3, zoom * (dist / lastTouchDist))); }
+    lastTouchDist = dist;
+  }
+}, {passive: true});
+canvas.addEventListener('touchend', () => { isDragging = false; lastTouchDist = 0; });
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.save();
+  ctx.translate(panX, panY);
+  ctx.scale(zoom, zoom);
   
   // 배경 별
   for (let i = 0; i < 80; i++) {
@@ -200,12 +243,21 @@ function draw() {
     });
   });
   
+  ctx.restore();
+  
+  // 줌 레벨 표시
+  ctx.fillStyle = '#b8a9cc';
+  ctx.font = '11px Pretendard';
+  ctx.textAlign = 'right';
+  ctx.fillText(`🔍 ${Math.round(zoom*100)}%  ⊞드래그이동 ⊟스크롤줌`, canvas.width - 20, canvas.height - 15);
+  
   requestAnimationFrame(draw);
 }
 
 canvas.addEventListener('mousemove', (e) => {
+  if (isDragging) { panX = e.clientX - dragStartX; panY = e.clientY - dragStartY; return; }
   const rect = canvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const mx = (e.clientX - rect.left - panX) / zoom, my = (e.clientY - rect.top - panY) / zoom;
   hoveredNode = null;
   for (const n of nodes) {
     if (Math.hypot(mx - n.x, my - n.y) < n.r + 5) {
